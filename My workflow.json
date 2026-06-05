@@ -1,0 +1,445 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "1aq8EECApi-T-xhyJfmV2-o3eqDk9P2I5jaWH8ZEqu4Q",
+          "mode": "list",
+          "cachedResultName": "Student_engagement+(New)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1aq8EECApi-T-xhyJfmV2-o3eqDk9P2I5jaWH8ZEqu4Q/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 16927061,
+          "mode": "list",
+          "cachedResultName": "Dataset",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1aq8EECApi-T-xhyJfmV2-o3eqDk9P2I5jaWH8ZEqu4Q/edit#gid=16927061"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1824,
+        -144
+      ],
+      "id": "3d60b838-6a5b-4f51-9a7a-b9ca1987b5c0",
+      "name": "Google Sheets Trigger",
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "YQXNBtxFeYoXhKZh",
+          "name": "Google Sheets Trigger OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst cleanedData = items.map((item) => {\n  const cleanedItem = { ...item.json };\n\n  // Convert StudentID to number\n  cleanedItem.StudentID = Number(cleanedItem.StudentID);\n\n  // Convert Gender to lowercase\n  cleanedItem.Gender = cleanedItem.Gender.toLowerCase();\n\n  // Convert Location to title case\n  cleanedItem.Location =\n    cleanedItem.Location.charAt(0).toUpperCase() +\n    cleanedItem.Location.slice(1).toLowerCase();\n\n  // Convert EnrollmentDate, LastLogin, and PurchaseDate to Date\n  cleanedItem.EnrollmentDate = new Date(cleanedItem.EnrollmentDate);\n  cleanedItem.LastLogin = new Date(cleanedItem.LastLogin);\n  cleanedItem.PurchaseDate = new Date(cleanedItem.PurchaseDate);\n\n  // Convert PaymentAmount to number and round to 2 decimal places\n  cleanedItem.PaymentAmount = Number(cleanedItem.PaymentAmount).toFixed(2);\n\n  // Convert Renewed to boolean\n  cleanedItem.Renewed = cleanedItem.Renewed.toLowerCase() === \"yes\";\n\n  return cleanedItem;\n});\n\nreturn cleanedData;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1600,
+        -144
+      ],
+      "id": "c7d1001d-933f-48e7-83cc-429ae4ad06c4",
+      "name": "Data Cleaning"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map((item) => item.json);\n\nconst totalStudents = items.length;\n\nconst totalVideosWatched = items.reduce(\n  (sum, item) => sum + item.VideosWatched,\n  0,\n);\n\nconst totalAssignmentsSubmitted = items.reduce(\n  (sum, items) => sum + (Number(items.AssignmentsSubmitted) || 0),\n  0\n);\n\nconst avgQuizScore =\n  items.reduce((sum, item) => sum + item.QuizScoresAvg, 0) / totalStudents;\n\nconst avgSessionTime =\n  items.reduce((sum, item) => sum + item.AvgSessionTime, 0) / totalStudents;\n\nconst renewedSubscriptions = items.filter((item) => item.Renewed).length;\n\nconst studentsByLocation = items.reduce((grouped, item) => {\n  grouped[item.Location] = (grouped[item.Location] || 0) + 1;\n  return grouped;\n}, {});\n\nreturn {\n  totalStudents,\n  totalVideosWatched,\n  totalAssignmentsSubmitted,\n  avgQuizScore,\n  avgSessionTime,\n  renewedSubscriptions,\n  studentsByLocation,\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1392,
+        -144
+      ],
+      "id": "4687dfbc-b169-46dd-8ae1-40c4a02d4410",
+      "name": "Calculating KPIs"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Act as an expert data analyst. Given the following KPIs from a student engagement dataset, summarize the overall engagement performance in 2-3 crisp and insightful sentences suitable for a leadership dashboard.\n\nMetrics:\n{{ $json.studentsByLocation }}\n{{ $json.totalStudents }}\n{{ $json.totalAssignmentsSubmitted }}\n",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -32,
+        -448
+      ],
+      "id": "28aa560f-1dcc-4957-b919-3872539fd9f9",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "grok-2-1212",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatXAiGrok",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        -544
+      ],
+      "id": "e3e6a76f-9388-47dd-9f9c-09f5196d717f",
+      "name": "xAI Grok Chat Model"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chart\": {\n    \"type\": \"doughnut\",\n    \"data\": {\n      \"datasets\": [{\n        \"data\": [],\n        \"backgroundColor\": [\"#ffffff00\"] \n      }]\n    },\n    \"options\": {\n      \"cutout\": \"90%\",\n      \"plugins\": {\n        \"legend\": { \"display\": false },\n        \"doughnutlabel\": {\n          \"labels\": [\n            {\n              \"text\": \"{{ $json.totalStudents }}\",\n              \"font\": {\n                \"size\": 40\n              }\n            },\n            {\n              \"text\": \"Total Students\"\n            }\n          ]\n        }\n      }\n    }\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1152,
+        -144
+      ],
+      "id": "a615be7f-369c-4f79-9ca8-7c91f6fb49b6",
+      "name": "Total Students"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1️⃣ Grab all incoming items\nconst items = $input.all();\n\n// 2️⃣ Prepare containers\nlet summaryText = '';\nconst charts = [];\n\n// 3️⃣ Loop over each item just once\nfor (const item of items) {\n  const data = item.json;\n\n  // Capture the first summary block found\n  if (data.text && !summaryText) {\n    summaryText = data.text.trim();\n  }\n  // If it's a chart block, collect URL + auto-ID\n  else if (data.url) {\n    // Try to pick a unique part of the chart URL for captioning\n    const chartId =\n      data.url.match(/(sf|zf)-[\\w-]+/)?.[0] || `chart-${charts.length + 1}`;\n    charts.push({\n      caption: `Chart ${charts.length + 1} (${chartId})`,\n      imageUrl: data.url\n    });\n  }\n}\n\n// 4️⃣ Fallback summary if none was provided\nif (!summaryText) {\n  summaryText = \"No summary provided.\";\n}\n\n// 5️⃣ Compose the HTML for each chart\nconst chartBlocks = charts\n  .map(\n    chart => `\n  <div class=\"chart-block\">\n    <h3>${chart.caption}</h3>\n    <img src=\"${chart.imageUrl}\" alt=\"${chart.caption}\" />\n  </div>\n`\n  )\n  .join(\"\\n\");\n\n// 6️⃣ Full HTML report document\nconst html = `\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <title>📊 Student Engagement Report</title>\n  <style>\n    body {\n      font-family: 'Segoe UI', sans-serif;\n      background: #f5f7fa;\n      margin: 0;\n      padding: 30px;\n      color: #222;\n    }\n    h1 {\n      color: #2c3e50;\n      text-align: center;\n      margin-bottom: 30px;\n    }\n    .summary-box {\n      background: #fffefc;\n      border-left: 5px solid #ffa500;\n      padding: 20px 25px;\n      border-radius: 8px;\n      max-width: 900px;\n      margin: 0 auto 40px auto;\n      box-shadow: 0 2px 8px rgba(0,0,0,0.05);\n      font-size: 1.05em;\n    }\n    .charts {\n      display: flex;\n      flex-wrap: wrap;\n      justify-content: center;\n      gap: 24px;\n    }\n    .chart-block {\n      background: #fff;\n      border-radius: 10px;\n      box-shadow: 0 2px 6px rgba(0,0,0,0.1);\n      padding: 16px;\n      text-align: center;\n      width: 100%;\n      max-width: 360px;\n    }\n    .chart-block img {\n      max-width: 100%;\n      border-radius: 6px;\n      border: 1px solid #ccc;\n    }\n    footer {\n      text-align: center;\n      font-size: 0.85em;\n      color: #666;\n      margin-top: 50px;\n    }\n  </style>\n</head>\n<body>\n  <h1>📊 Student Engagement Report</h1>\n  <div class=\"summary-box\"><p>${summaryText}</p></div>\n  <div class=\"charts\">${chartBlocks}</div>\n  <footer>Generated on ${new Date().toLocaleString()}</footer>\n</body>\n</html>\n`;\n\n// 7️⃣ Return exactly one item containing the full report\nreturn [\n  {\n    json: {\n      html\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        -128
+      ],
+      "id": "08699a5f-bddb-4031-9971-d4e32bd3c679",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "sendTo": "sahdev.kunalsoni@gmail.com",
+        "subject": "Report",
+        "message": "={{ $json.html }} <p>Full data: <a href=\"https://docs.google.com/spreadsheets/d/11KqxqaQrEi0r0PaDGik_nE0OpyF9hl_pewuBosFRVA4/edit?usp=sharing\">Google Sheet</a></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -112,
+        -144
+      ],
+      "id": "972b3636-36c1-47d5-879c-52702b58a949",
+      "name": "Send a message",
+      "webhookId": "3fa05347-b039-474e-b026-f7390695c1b8",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "kTu12s8XyRSeNRy7",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 9
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -560,
+        -240
+      ],
+      "id": "3ba03d86-97d0-4bb4-a2f4-bcca074332d3",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chart\": {\n    \"type\": \"doughnut\",\n    \"data\": {\n      \"datasets\": [{\n        \"data\": [],\n        \"backgroundColor\": [\"#ffffff00\"] \n      }]\n    },\n    \"options\": {\n      \"cutout\": \"90%\",\n      \"plugins\": {\n        \"legend\": { \"display\": false },\n        \"doughnutlabel\": {\n          \"labels\": [\n            {\n              \"text\": \"{{ $json.totalAssignmentsSubmitted }}\",\n              \"font\": {\n                \"size\": 40\n              }\n            },\n            {\n              \"text\": \"Total Students\"\n            }\n          ]\n        }\n      }\n    }\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1152,
+        64
+      ],
+      "id": "1c41ed91-c8f8-4e66-b9f1-fa977cfd5b06",
+      "name": "totalAssignmentsSubmitted"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chart\": {\n    \"type\": \"horizontalBar\",\n    \"data\": {\n      \"labels\": [\n        \"{{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[0][0] }}\",\n        \"{{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[1][0] }}\",\n        \"{{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[2][0] }}\",\n        \"{{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[3][0] }}\",\n        \"{{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[4][0] }}\",\n        \"{{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[5][0] }}\"\n      ],\n      \"datasets\": [\n        {\n          \"label\": \"Student Count\",\n          \"data\": [\n            {{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[0][1] }},\n            {{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[1][1] }},\n            {{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[2][1] }},\n            {{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[3][1] }},\n            {{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[4][1] }},\n            {{ Object.entries($json.studentsByLocation).sort((a,b) => b[1]-a[1])[5][1] }}\n          ],\n          \"backgroundColor\": \"rgba(75,192,192,0.6)\"\n        }\n      ]\n    },\n    \"options\": {\n      \"title\": {\n        \"display\": true,\n        \"text\": \"Top 6 Locations\"\n      }\n    }\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1152,
+        272
+      ],
+      "id": "17c5bd4c-ac98-4216-b815-857cf1e1e1c9",
+      "name": "Location Count"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chart\": {\n    \"type\": \"doughnut\",\n    \"data\": {\n      \"datasets\": [{\n        \"data\": [],\n        \"backgroundColor\": [\"#ffffff00\"] \n      }]\n    },\n    \"options\": {\n      \"cutout\": \"90%\",\n      \"plugins\": {\n        \"legend\": { \"display\": false },\n        \"doughnutlabel\": {\n          \"labels\": [\n            {\n              \"text\": \"{{ $json.totalVideosWatched }}\",\n              \"font\": {\n                \"size\": 40\n              }\n            },\n            {\n              \"text\": \"Total Students\"\n            }\n          ]\n        }\n      }\n    }\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -640,
+        -832
+      ],
+      "id": "15e2fd31-3ef1-42c7-b650-4bccf6df751e",
+      "name": "TOTALVIDEOSWATCHED2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chart\": {\n    \"type\": \"doughnut\",\n    \"data\": {\n      \"datasets\": [{\n        \"data\": [],\n        \"backgroundColor\": [\"#ffffff00\"] \n      }]\n    },\n    \"options\": {\n      \"cutout\": \"90%\",\n      \"plugins\": {\n        \"legend\": { \"display\": false },\n        \"doughnutlabel\": {\n          \"labels\": [\n            {\n              \"text\": \"{{ $json.avgSessionTime }}\",\n              \"font\": {\n                \"size\": 40\n              }\n            },\n            {\n              \"text\": \"Total Students\"\n            }\n          ]\n        }\n      }\n    }\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1632,
+        -688
+      ],
+      "id": "0414ab83-5483-44b4-8902-0b9734f9c1ab",
+      "name": "AVGSESSIONS"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chart\": {\n    \"type\": \"doughnut\",\n    \"data\": {\n      \"datasets\": [{\n        \"data\": [],\n        \"backgroundColor\": [\"#ffffff00\"] \n      }]\n    },\n    \"options\": {\n      \"cutout\": \"90%\",\n      \"plugins\": {\n        \"legend\": { \"display\": false },\n        \"doughnutlabel\": {\n          \"labels\": [\n            {\n              \"text\": \"{{ $json.avgQuizScore }}\",\n              \"font\": {\n                \"size\": 40\n              }\n            },\n            {\n              \"text\": \"Total Students\"\n            }\n          ]\n        }\n      }\n    }\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1520,
+        352
+      ],
+      "id": "fe8a2df2-85c2-4b7f-a4f0-9bf36001b2ef",
+      "name": "AVG-QUIZ"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "Data Cleaning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Cleaning": {
+      "main": [
+        [
+          {
+            "node": "Calculating KPIs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculating KPIs": {
+      "main": [
+        [
+          {
+            "node": "Total Students",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "totalAssignmentsSubmitted",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Location Count",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AVG-QUIZ",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "TOTALVIDEOSWATCHED2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 5
+          },
+          {
+            "node": "AVGSESSIONS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "xAI Grok Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Total Students": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        []
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "totalAssignmentsSubmitted": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Location Count": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TOTALVIDEOSWATCHED2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "AVGSESSIONS": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 7
+          }
+        ]
+      ]
+    },
+    "AVG-QUIZ": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "743754f0-773a-4021-8f75-05bf4a06d959",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "66739b7493fd027ef1757a40c54261be0551fe1faa9ad78d56164bd3c4e9bade"
+  },
+  "nodeGroups": [],
+  "id": "90bxhhIsAsEWK2yf",
+  "tags": []
+}
